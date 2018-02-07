@@ -53,8 +53,6 @@ import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.security.auth.Subject;
-
-import org.apache.curator.framework.CuratorFramework;
 import org.apache.storm.Config;
 import org.apache.storm.Constants;
 import org.apache.storm.DaemonConfig;
@@ -66,7 +64,6 @@ import org.apache.storm.blobstore.BlobSynchronizer;
 import org.apache.storm.blobstore.InputStreamWithMeta;
 import org.apache.storm.blobstore.KeySequenceNumber;
 import org.apache.storm.blobstore.LocalFsBlobStore;
-import org.apache.storm.callback.DefaultWatcherCallBack;
 import org.apache.storm.cluster.ClusterStateContext;
 import org.apache.storm.cluster.ClusterUtils;
 import org.apache.storm.cluster.DaemonType;
@@ -124,8 +121,6 @@ import org.apache.storm.generated.TopologyInitialStatus;
 import org.apache.storm.generated.TopologyPageInfo;
 import org.apache.storm.generated.TopologyStatus;
 import org.apache.storm.generated.TopologySummary;
-import org.apache.storm.generated.WorkerMetricPoint;
-import org.apache.storm.generated.WorkerMetrics;
 import org.apache.storm.generated.WorkerResources;
 import org.apache.storm.generated.WorkerSummary;
 import org.apache.storm.logging.ThriftAccessLogger;
@@ -134,10 +129,6 @@ import org.apache.storm.metric.StormMetricsRegistry;
 import org.apache.storm.metric.api.DataPoint;
 import org.apache.storm.metric.api.IClusterMetricsConsumer;
 import org.apache.storm.metric.api.IClusterMetricsConsumer.ClusterInfo;
-import org.apache.storm.metricstore.AggLevel;
-import org.apache.storm.metricstore.Metric;
-import org.apache.storm.metricstore.MetricStore;
-import org.apache.storm.metricstore.MetricStoreConfig;
 import org.apache.storm.nimbus.DefaultTopologyValidator;
 import org.apache.storm.nimbus.ILeaderElector;
 import org.apache.storm.nimbus.ITopologyActionNotifierPlugin;
@@ -186,7 +177,6 @@ import org.apache.storm.utils.Utils;
 import org.apache.storm.utils.Utils.UptimeComputer;
 import org.apache.storm.utils.VersionInfo;
 import org.apache.storm.validation.ConfigValidation;
-import org.apache.storm.zookeeper.ClientZookeeper;
 import org.apache.storm.zookeeper.Zookeeper;
 import org.apache.thrift.TException;
 import org.apache.zookeeper.ZooDefs;
@@ -236,7 +226,6 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
     private static final Meter getOwnerResourceSummariesCalls = StormMetricsRegistry.registerMeter(
             "nimbus:num-getOwnerResourceSummaries-calls");
     private static final Meter shutdownCalls = StormMetricsRegistry.registerMeter("nimbus:num-shutdown-calls");
-    private static final Meter processWorkerMetricsCalls = StormMetricsRegistry.registerMeter("nimbus:process-worker-metric-calls");
     // END Metrics
     
     private static final String STORM_VERSION = VersionInfo.getVersion();
@@ -343,7 +332,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
         return Nimbus.make(base.get_prev_status());
     };
     
-    private static final Map<TopologyStatus, Map<TopologyActions, TopologyStateTransition>> TOPO_STATE_TRANSITIONS =
+    private static final Map<TopologyStatus, Map<TopologyActions, TopologyStateTransition>> TOPO_STATE_TRANSITIONS = 
             new ImmutableMap.Builder<TopologyStatus, Map<TopologyActions, TopologyStateTransition>>()
             .put(TopologyStatus.ACTIVE, new ImmutableMap.Builder<TopologyActions, TopologyStateTransition>()
                     .put(TopologyActions.INACTIVATE, INACTIVE_TRANSITION)
@@ -581,10 +570,9 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
         return ret;
     }
     
-    private static int getVersionForKey(String key, NimbusInfo nimbusInfo,
-        CuratorFramework zkClient) throws KeyNotFoundException {
+    private static int getVersionForKey(String key, NimbusInfo nimbusInfo, Map<String, Object> conf) throws KeyNotFoundException {
         KeySequenceNumber kseq = new KeySequenceNumber(key, nimbusInfo);
-        return kseq.getKeySequenceNumber(zkClient);
+        return kseq.getKeySequenceNumber(conf);
     }
     
     private static StormTopology readStormTopology(String topoId, TopoCache tc) throws KeyNotFoundException, AuthorizationException,
@@ -604,7 +592,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
     
     /**
      * convert {topology-id -> SchedulerAssignment} to
-     *         {topology-id -> {executor [node port]}}.
+     *         {topology-id -> {executor [node port]}}
      * @return
      */
     private static Map<String, Map<List<Long>, List<Object>>> computeTopoToExecToNodePort(Map<String, SchedulerAssignment> schedAssignments) {
@@ -886,8 +874,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
         }
     }
     
-    private static StormTopology tryReadTopology(String topoId, TopoCache tc)
-            throws NotAliveException, AuthorizationException, IOException {
+    private static StormTopology tryReadTopology(String topoId, TopoCache tc) throws NotAliveException, AuthorizationException, IOException {
         try {
             return readStormTopologyAsNimbus(topoId, tc);
         } catch (KeyNotFoundException e) {
@@ -1009,10 +996,10 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
         final Nimbus nimbus = new Nimbus(conf, inimbus);
         nimbus.launchServer();
         final ThriftServer server = new ThriftServer(conf, new Processor<>(nimbus), ThriftConnectionType.NIMBUS);
-        Utils.addShutdownHookWithDelayedForceKill(() -> {
+        Utils.addShutdownHookWithForceKillIn1Sec(() -> {
             nimbus.shutdown();
             server.stop();
-        }, 10);
+        });
         LOG.info("Starting nimbus server for storm version '{}'", STORM_VERSION);
         server.serve();
         return nimbus;
@@ -1030,15 +1017,12 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
     }
     
     private final Map<String, Object> conf;
-    private MetricStore metricsStore;
     private final NavigableMap<SimpleVersion, List<String>> supervisorClasspaths;
     private final NimbusInfo nimbusHostPortInfo;
     private final INimbus inimbus;
     private IAuthorizer authorizationHandler;
     private final IAuthorizer impersonationAuthorizationHandler;
     private final AtomicLong submittedCount;
-    //Cached CuratorFramework, mainly used for BlobStore.
-    private CuratorFramework zkClient;
     private final IStormClusterState stormClusterState;
     private final Object submitLock = new Object();
     private final Object schedLock = new Object();
@@ -1074,17 +1058,6 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
     private final List<ClusterMetricsConsumerExecutor> clusterConsumerExceutors;
     private final IGroupMappingServiceProvider groupMapper;
     private final IPrincipalToLocal principalToLocal;
-
-    private static CuratorFramework makeZKClient(Map<String, Object> conf) {
-        List<String> servers = (List<String>)conf.get(Config.STORM_ZOOKEEPER_SERVERS);
-        Object port = conf.get(Config.STORM_ZOOKEEPER_PORT);
-        String root = (String)conf.get(Config.STORM_ZOOKEEPER_ROOT);
-        CuratorFramework ret = null;
-        if (servers != null && port != null) {
-            ret = ClientZookeeper.mkClient(conf, servers, port, root, new DefaultWatcherCallBack(), conf);
-        }
-        return ret;
-    }
     
     private static IStormClusterState makeStormClusterState(Map<String, Object> conf) throws Exception {
         List<ACL> acls = null;
@@ -1107,15 +1080,6 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             BlobStore blobStore, TopoCache topoCache, ILeaderElector leaderElector, IGroupMappingServiceProvider groupMapper)
         throws Exception {
         this.conf = conf;
-
-        this.metricsStore = null;
-        try {
-            this.metricsStore = MetricStoreConfig.configure(conf);
-        } catch (Exception e) {
-            // the metrics store is not critical to the operation of the cluster, allow Nimbus to come up
-            LOG.error("Failed to initialize metric store", e);
-        }
-
         if (hostPortInfo == null) {
             hostPortInfo = NimbusInfo.fromConf(conf);
         }
@@ -1154,9 +1118,8 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
         });
         this.underlyingScheduler = makeScheduler(conf, inimbus);
         this.scheduler = wrapAsBlacklistScheduler(conf, underlyingScheduler);
-        this.zkClient = makeZKClient(conf);
         if (leaderElector == null) {
-            leaderElector = Zookeeper.zkLeaderElector(conf, zkClient, blobStore, topoCache);
+            leaderElector = Zookeeper.zkLeaderElector(conf, blobStore, topoCache);
         }
         this.leaderElector = leaderElector;
         this.idToSchedStatus = new AtomicReference<>(new HashMap<>());
@@ -1306,18 +1269,18 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
                 store.createBlob(jarKey, fin, new SettableBlobMeta(BlobStoreAclHandler.DEFAULT), subject);
             }
             if (store instanceof LocalFsBlobStore) {
-                clusterState.setupBlobstore(jarKey, hostPortInfo, getVersionForKey(jarKey, hostPortInfo, zkClient));
+                clusterState.setupBlobstore(jarKey, hostPortInfo, getVersionForKey(jarKey, hostPortInfo, conf));
             }
         }
 
         topoCache.addTopoConf(topoId, subject, topoConf);
         if (store instanceof LocalFsBlobStore) {
-            clusterState.setupBlobstore(confKey, hostPortInfo, getVersionForKey(confKey, hostPortInfo, zkClient));
+            clusterState.setupBlobstore(confKey, hostPortInfo, getVersionForKey(confKey, hostPortInfo, conf));
         }
 
         topoCache.addTopology(topoId, subject, topology);
         if (store instanceof LocalFsBlobStore) {
-            clusterState.setupBlobstore(codeKey, hostPortInfo, getVersionForKey(codeKey, hostPortInfo, zkClient));
+            clusterState.setupBlobstore(codeKey, hostPortInfo, getVersionForKey(codeKey, hostPortInfo, conf));
         }
     }
 
@@ -2190,7 +2153,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
         LOG.debug("Creating list of key entries for blobstore inside zookeeper {} local {}", activeKeys, activeLocalKeys);
         for (String key: activeLocalKeys) {
             try {
-                state.setupBlobstore(key, nimbusInfo, getVersionForKey(key, nimbusInfo, zkClient));
+                state.setupBlobstore(key, nimbusInfo, getVersionForKey(key, nimbusInfo, conf));
             } catch (KeyNotFoundException e) {
                 // invalid key, remove it from blobstore
                 store.deleteBlob(key, NIMBUS_SUBJECT);
@@ -2301,7 +2264,6 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
                 sync.setNimbusInfo(nimbusInfo);
                 sync.setBlobStoreKeySet(allKeys);
                 sync.setZookeeperKeySet(zkKeys);
-                sync.setZkClient(zkClient);
                 sync.syncBlobs();
             } //else not leader (NOOP)
         } //else local (NOOP)
@@ -2749,7 +2711,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             
             // lock protects against multiple topologies being submitted at once and
             // cleanup thread killing topology in b/w assignment and starting the topology
-            synchronized (submitLock) {
+            synchronized(submitLock) {
                 assertTopoActive(topoName, false);
                 //cred-update-lock is not needed here because creds are being added for the first time.
                 if (creds != null) {
@@ -3388,7 +3350,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             BlobStore store = blobStore;
             NimbusInfo ni = nimbusHostPortInfo;
             if (store instanceof LocalFsBlobStore) {
-                state.setupBlobstore(key, ni, getVersionForKey(key, ni, zkClient));
+                state.setupBlobstore(key, ni, getVersionForKey(key, ni, conf));
             }
             LOG.debug("Created state in zookeeper {} {} {}", state, store, ni);
         } catch (Exception e) {
@@ -3809,7 +3771,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
                     }
                     Map<WorkerSlot, WorkerResources> workerResources = getWorkerResourcesForTopology(topoId);
                     boolean isAllowed = userTopologies.contains(topoId);
-                    for (WorkerSummary workerSummary: StatsUtil.aggWorkerStats(topoId, topoName, taskToComp, beats,
+                    for (WorkerSummary workerSummary: StatsUtil.aggWorkerStats(topoId, topoName, taskToComp, beats, 
                             exec2NodePort, nodeToHost, workerResources, includeSys, isAllowed, sid)) {
                         pageInfo.add_to_worker_summaries(workerSummary);
                     }
@@ -3827,7 +3789,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
     
     @Override
     public ComponentPageInfo getComponentPageInfo(String topoId, String componentId, String window,
-                                                  boolean includeSys) throws NotAliveException, AuthorizationException, TException {
+            boolean includeSys) throws NotAliveException, AuthorizationException, TException {
         try {
             getComponentPageInfoCalls.mark();
             CommonTopoInfo info = getCommonTopoInfo(topoId, "getComponentPageInfo");
@@ -4023,8 +3985,8 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
         List<NimbusSummary> nimbuses = stormClusterState.nimbuses();
         NimbusInfo leader = leaderElector.getLeader();
         for (NimbusSummary nimbusSummary: nimbuses) {
-            if (leader.getHost().equals(nimbusSummary.get_host())
-                    && leader.getPort() == nimbusSummary.get_port()) {
+            if (leader.getHost().equals(nimbusSummary.get_host()) &&
+                    leader.getPort() == nimbusSummary.get_port()) {
                 nimbusSummary.set_uptime_secs(Time.deltaSecs(nimbusSummary.get_uptime_secs()));
                 nimbusSummary.set_isLeader(true);
                 return nimbusSummary;
@@ -4061,7 +4023,7 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             //else, add only this owner (the input paramter) to the map
             Map<String, List<StormBase>> ownerToBasesMap = new HashMap<>();
 
-            if (owner == null) {
+            if (owner == null){
                 // add all the owners to the map
                 for (StormBase base: topoIdToBases.values()) {
                     String baseOwner = base.get_owner();
@@ -4191,12 +4153,6 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
             if (actionNotifier != null) {
                 actionNotifier.cleanup();
             }
-            if (zkClient != null) {
-                zkClient.close();
-            }            
-            if (metricsStore != null) {
-                metricsStore.close();
-            }
             LOG.info("Shut down master");
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -4209,27 +4165,4 @@ public class Nimbus implements Iface, Shutdownable, DaemonCommon {
     public boolean isWaiting() {
         return timer.isTimerWaiting();
     }
-
-    @Override
-    public void processWorkerMetrics(WorkerMetrics metrics) throws org.apache.thrift.TException {
-        processWorkerMetricsCalls.mark();
-
-        checkAuthorization(null, null, "processWorkerMetrics");
-
-        if (this.metricsStore == null) {
-            return;
-        }
-
-        for (WorkerMetricPoint m : metrics.get_metricList().get_metrics()) {
-            try {
-                Metric metric = new Metric(m.get_metricName(), m.get_timestamp(), metrics.get_topologyId(),
-                        m.get_metricValue(), m.get_componentId(), m.get_executorId(), metrics.get_hostname(),
-                        m.get_streamId(), metrics.get_port(), AggLevel.AGG_LEVEL_NONE);
-                this.metricsStore.insert(metric);
-            } catch (Exception e) {
-                LOG.error("Failed to save metric", e);
-            }
-        }
-    }
-
 }

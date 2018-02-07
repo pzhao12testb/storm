@@ -194,7 +194,11 @@ backpressure.disruptor.low.watermark: 0.4
 backpressure.znode.timeout.secs: 30
 backpressure.znode.update.freq.secs: 15
 
-# Used by workers to communicate
+zmq.threads: 1
+zmq.linger.millis: 5000
+zmq.hwm: 0
+
+
 storm.messaging.netty.server_worker_threads: 1
 storm.messaging.netty.client_worker_threads: 1
 storm.messaging.netty.buffer_size: 5242880 #5MB buffer
@@ -295,12 +299,6 @@ pacemaker.thrift.message.size.max: 10485760
 storm.daemon.metrics.reporter.plugins:
      - "org.apache.storm.daemon.metrics.reporters.JmxPreparableReporter"
 
-storm.metricstore.class: "org.apache.storm.metricstore.rocksdb.RocksDbStore"
-storm.metricstore.rocksdb.location: "storm_rocks"
-storm.metricstore.rocksdb.create_if_missing: true
-storm.metricstore.rocksdb.metadata_string_cache_capacity: 4000
-storm.metricstore.rocksdb.retention_hours: 240
-
 # configuration of cluster metrics consumer
 storm.cluster.metrics.consumer.publish.interval.secs: 60
 
@@ -332,5 +330,4 @@ worker.metrics:
     "CGroupCpu": "org.apache.storm.metric.cgroup.CGroupCpu"
     "CGroupCpuGuarantee": "org.apache.storm.metric.cgroup.CGroupCpuGuarantee"
 
-# The number of buckets for running statistics
 num.stat.buckets: 20

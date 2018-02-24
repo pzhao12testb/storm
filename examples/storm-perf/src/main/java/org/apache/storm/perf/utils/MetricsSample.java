@@ -89,19 +89,19 @@ public class MetricsSample {
 
         // Executor summaries
         for(ExecutorSummary executorSummary : executorSummaries){
-            ExecutorStats executorStats = executorSummary.get_stats();
-            if(executorStats == null){
+            ExecutorStats execuatorStats = executorSummary.get_stats();
+            if(execuatorStats == null){
                 continue;
             }
 
-            ExecutorSpecificStats executorSpecificStats = executorStats.get_specific();
+            ExecutorSpecificStats executorSpecificStats = execuatorStats.get_specific();
             if(executorSpecificStats == null){
                 // bail out
                 continue;
             }
 
             // transferred totals
-            Map<String,Map<String,Long>> transferred = executorStats.get_transferred();
+            Map<String,Map<String,Long>> transferred = execuatorStats.get_transferred();
             Map<String, Long> txMap = transferred.get(":all-time");
             if(txMap == null){
                 continue;
@@ -137,15 +137,13 @@ public class MetricsSample {
 
                 Double total = 0d;
                 Map<String, Double> vals = spoutStats.get_complete_ms_avg().get(":all-time");
-                if (vals != null) {
-                    for (String key : vals.keySet()) {
-                        total += vals.get(key);
-                    }
-                    Double latency = total / vals.size();
-                    spoutLatencySum += latency;
+                for(String key : vals.keySet()){
+                    total += vals.get(key);
                 }
+                Double latency = total / vals.size();
 
                 spoutExecCount++;
+                spoutLatencySum += latency;
             }
 
 

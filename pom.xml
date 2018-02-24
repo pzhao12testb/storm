@@ -262,7 +262,7 @@
         <jgrapht.version>0.9.0</jgrapht.version>
         <guava.version>16.0.1</guava.version>
         <auto-service.version>1.0-rc3</auto-service.version>
-        <netty.version>3.9.9.Final</netty.version>
+        <netty.version>3.9.0.Final</netty.version>
         <sysout-over-slf4j.version>1.0.2</sysout-over-slf4j.version>
         <log4j-over-slf4j.version>1.6.6</log4j-over-slf4j.version>
         <log4j.version>2.8.2</log4j.version>
@@ -323,7 +323,6 @@
         <jool.version>0.9.12</jool.version>
         <caffeine.version>2.3.5</caffeine.version>
         <jaxb-version>2.3.0</jaxb-version>
-        <rocksdb-version>5.8.6</rocksdb-version>
 
         <!-- see intellij profile below... This fixes an annoyance with intellij -->
         <provided.scope>provided</provided.scope>
@@ -355,7 +354,6 @@
         <module>external/storm-autocreds</module>
         <module>external/storm-kafka</module>
         <module>external/storm-hdfs</module>
-        <module>external/storm-hdfs-blobstore</module>
         <module>external/storm-hbase</module>
         <module>external/storm-hive</module>
         <module>external/storm-jdbc</module>
@@ -1056,11 +1054,6 @@
                 <artifactId>jaxb-api</artifactId>
                 <version>${jaxb-version}</version>
             </dependency>
-            <dependency>
-                <groupId>org.rocksdb</groupId>
-                <artifactId>rocksdbjni</artifactId>
-                <version>${rocksdb-version}</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -1104,9 +1097,6 @@
                         <trimStackTrace>false</trimStackTrace>
                         <forkCount>1.0C</forkCount>
                         <reuseForks>true</reuseForks>
-                        <systemPropertyVariables>
-                            <storm.home>${project.basedir}/target/testhome</storm.home>
-                        </systemPropertyVariables>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -1243,7 +1233,7 @@
             <extension>
                 <groupId>edu.illinois</groupId>
                 <artifactId>incremental-builder-with-ekstazi</artifactId>
-                <version>3.5.3</version>
+                <version>3.5.5</version>
             </extension>
         </extensions>
     </build>

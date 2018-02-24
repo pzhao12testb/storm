@@ -128,7 +128,6 @@ public class SpoutExecutor extends Executor {
         }
         openOrPrepareWasCalled.set(true);
         LOG.info("Opened spout {}:{}", componentId, idToTask.keySet());
-        setupTicks(true);
         setupMetrics();
     }
 

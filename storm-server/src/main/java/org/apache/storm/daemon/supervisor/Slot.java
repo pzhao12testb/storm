@@ -95,14 +95,12 @@ public class Slot extends Thread implements AutoCloseable, BlobChangingCallback 
         public final ISupervisor iSupervisor;
         public final LocalState localState;
         public final BlobChangingCallback changingCallback;
-        public final OnlyLatestExecutor<Integer> metricsExec;
-
+        
         StaticState(AsyncLocalizer localizer, long hbTimeoutMs, long firstHbTimeoutMs,
-                    long killSleepMs, long monitorFreqMs,
-                    ContainerLauncher containerLauncher, String host, int port,
-                    ISupervisor iSupervisor, LocalState localState,
-                    BlobChangingCallback changingCallback,
-                    OnlyLatestExecutor<Integer> metricsExec) {
+                long killSleepMs, long monitorFreqMs,
+                ContainerLauncher containerLauncher, String host, int port,
+                ISupervisor iSupervisor, LocalState localState,
+                BlobChangingCallback changingCallback) {
             this.localizer = localizer;
             this.hbTimeoutMs = hbTimeoutMs;
             this.firstHbTimeoutMs = firstHbTimeoutMs;
@@ -114,7 +112,6 @@ public class Slot extends Thread implements AutoCloseable, BlobChangingCallback 
             this.iSupervisor = iSupervisor;
             this.localState = localState;
             this.changingCallback = changingCallback;
-            this.metricsExec = metricsExec;
         }
     }
 
@@ -939,9 +936,6 @@ public class Slot extends Thread implements AutoCloseable, BlobChangingCallback 
             }
             dynamicState = dynamicState.withProfileActions(mod, modPending);
         }
-
-        dynamicState.container.processMetrics(staticState.metricsExec);
-
         Time.sleep(staticState.monitorFreqMs);
         return dynamicState;
     }
@@ -974,17 +968,14 @@ public class Slot extends Thread implements AutoCloseable, BlobChangingCallback 
     private volatile boolean done = false;
     private volatile DynamicState dynamicState;
     private final AtomicReference<Map<Long, LocalAssignment>> cachedCurrentAssignments;
-    private final OnlyLatestExecutor<Integer> metricsExec;
-
+    
     public Slot(AsyncLocalizer localizer, Map<String, Object> conf,
-                ContainerLauncher containerLauncher, String host,
-                int port, LocalState localState,
-                IStormClusterState clusterState,
-                ISupervisor iSupervisor,
-                AtomicReference<Map<Long, LocalAssignment>> cachedCurrentAssignments,
-                OnlyLatestExecutor<Integer> metricsExec) throws Exception {
+            ContainerLauncher containerLauncher, String host,
+            int port, LocalState localState,
+            IStormClusterState clusterState,
+            ISupervisor iSupervisor,
+            AtomicReference<Map<Long, LocalAssignment>> cachedCurrentAssignments) throws Exception {
         super("SLOT_"+port);
-        this.metricsExec = metricsExec;
 
         this.cachedCurrentAssignments = cachedCurrentAssignments;
         this.clusterState = clusterState;
@@ -1030,8 +1021,7 @@ public class Slot extends Thread implements AutoCloseable, BlobChangingCallback 
             port,
             iSupervisor,
             localState,
-            this,
-            metricsExec);
+            this);
         this.newAssignment.set(dynamicState.newAssignment);
         if (MachineState.RUNNING == dynamicState.state) {
             //We are running so we should recover the blobs.

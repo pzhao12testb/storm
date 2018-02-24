@@ -251,6 +251,7 @@ public abstract class Executor implements Callable, EventHandler<Object> {
         String handlerName = componentId + "-executor" + executorId;
         Utils.SmartThread handlers =
                 Utils.asyncLoop(this, false, reportErrorDie, Thread.NORM_PRIORITY, true, true, handlerName);
+        setupTicks(StatsUtil.SPOUT.equals(type));
 
         LOG.info("Finished loading executor " + componentId + ":" + executorId);
         return new ExecutorShutdown(this, Lists.newArrayList(systemThreads, handlers), idToTask, receiveQueue, sendQueue);
@@ -386,15 +387,11 @@ public abstract class Executor implements Callable, EventHandler<Object> {
                 LOG.info("Timeouts disabled for executor {}:{}", componentId, executorId);
             } else {
                 StormTimer timerTask = workerData.getUserTimer();
-                timerTask.scheduleRecurring(tickTimeSecs, tickTimeSecs, () -> {
-                    // We should create a new tick tuple for each recurrence instead of sharing object
-                    // More detail on https://issues.apache.org/jira/browse/STORM-2912
-                    TupleImpl tuple = new TupleImpl(workerTopologyContext, new Values(tickTimeSecs),
-                            (int) Constants.SYSTEM_TASK_ID, Constants.SYSTEM_TICK_STREAM_ID);
-                    final List<AddressedTuple> tickTuple =
-                            Lists.newArrayList(new AddressedTuple(AddressedTuple.BROADCAST_DEST, tuple));
-                    receiveQueue.publish(tickTuple);
-                });
+                TupleImpl tuple = new TupleImpl(workerTopologyContext, new Values(tickTimeSecs),
+                    (int) Constants.SYSTEM_TASK_ID, Constants.SYSTEM_TICK_STREAM_ID);
+                final List<AddressedTuple> tickTuple =
+                    Lists.newArrayList(new AddressedTuple(AddressedTuple.BROADCAST_DEST, tuple));
+                timerTask.scheduleRecurring(tickTimeSecs, tickTimeSecs, () -> receiveQueue.publish(tickTuple));
             }
         }
     }

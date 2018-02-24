@@ -18,12 +18,12 @@
 
 package org.apache.storm.security.auth.authorizer;
 
-import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.HashSet;
+import java.util.Collection;
+import java.io.IOException;
 
 import org.apache.storm.Config;
 import org.apache.storm.security.auth.IAuthorizer;
@@ -49,9 +49,7 @@ public class SimpleACLAuthorizer implements IAuthorizer {
             "getClusterInfo",
             "getSupervisorPageInfo",
             "getOwnerResourceSummaries"));
-    protected Set<String> supervisorCommands = new HashSet<>(Arrays.asList(
-            "fileDownload",
-            "processWorkerMetrics"));
+    protected Set<String> supervisorCommands = new HashSet<>(Arrays.asList("fileDownload"));
     protected Set<String> topoReadOnlyCommands = new HashSet<>(Arrays.asList(
             "getTopologyConf",
             "getTopology",
@@ -88,9 +86,8 @@ public class SimpleACLAuthorizer implements IAuthorizer {
     protected Set<String> nimbusGroups;
     protected IPrincipalToLocal ptol;
     protected IGroupMappingServiceProvider groupMappingServiceProvider;
-
     /**
-     * Invoked once immediately after construction.
+     * Invoked once immediately after construction
      * @param conf Storm configuration
      */
     @Override
@@ -126,7 +123,7 @@ public class SimpleACLAuthorizer implements IAuthorizer {
     }
 
     /**
-     * permit() method is invoked for each incoming Thrift request.
+     * permit() method is invoked for each incoming Thrift request
      * @param context request context includes info about
      * @param operation operation name
      * @param topoConf configuration of targeted topology
@@ -141,7 +138,7 @@ public class SimpleACLAuthorizer implements IAuthorizer {
         if (groupMappingServiceProvider != null) {
             try {
                 userGroups = groupMappingServiceProvider.getGroups(user);
-            } catch (IOException e) {
+            } catch(IOException e) {
                 LOG.warn("Error while trying to fetch user groups",e);
             }
         }
@@ -172,7 +169,7 @@ public class SimpleACLAuthorizer implements IAuthorizer {
     }
 
     private Boolean checkTopoPermission(String principal, String user, Set<String> userGroups,
-                                        Map<String, Object> topoConf, String userConfigKey, String groupConfigKey) {
+                                        Map<String, Object> topoConf, String userConfigKey, String groupConfigKey){
         Set<String> configuredUsers = new HashSet<>();
 
         if (topoConf.containsKey(userConfigKey)) {
@@ -192,11 +189,10 @@ public class SimpleACLAuthorizer implements IAuthorizer {
     }
 
     private Boolean checkUserGroupAllowed(Set<String> userGroups, Set<String> configuredGroups) {
-        if (userGroups.size() > 0 && configuredGroups.size() > 0) {
+        if(userGroups.size() > 0 && configuredGroups.size() > 0) {
             for (String tgroup : configuredGroups) {
-                if (userGroups.contains(tgroup)) {
+                if(userGroups.contains(tgroup))
                     return true;
-                }
             }
         }
         return false;

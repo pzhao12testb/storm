@@ -121,6 +121,7 @@ public class LeaderElectorImp implements ILeaderElector {
 
     @Override
     public void close() {
-        //Do nothing now.
+        LOG.info("closing zookeeper connection of leader elector.");
+        zk.close();
     }
 }

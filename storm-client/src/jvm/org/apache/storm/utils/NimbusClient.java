@@ -23,8 +23,6 @@ import java.security.Principal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.commons.lang.StringUtils;
 import org.apache.storm.Config;
 import org.apache.storm.generated.Nimbus;
 import org.apache.storm.generated.NimbusSummary;
@@ -133,7 +131,7 @@ public class NimbusClient extends ThriftClient {
         }
 
         List<String> seeds;
-        if (conf.containsKey(Config.NIMBUS_HOST) && StringUtils.isNotBlank(conf.get(Config.NIMBUS_HOST).toString())) {
+        if (conf.containsKey(Config.NIMBUS_HOST)) {
             LOG.warn("Using deprecated config {} for backward compatibility. Please update your storm.yaml so it only has config {}",
                      Config.NIMBUS_HOST, Config.NIMBUS_SEEDS);
             seeds = Lists.newArrayList(conf.get(Config.NIMBUS_HOST).toString());

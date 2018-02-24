@@ -87,7 +87,6 @@ public class BoltExecutor extends Executor {
         }
         openOrPrepareWasCalled.set(true);
         LOG.info("Prepared bolt {}:{}", componentId, idToTask.keySet());
-        setupTicks(false);
         setupMetrics();
     }
 
